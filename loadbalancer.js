@@ -3,6 +3,7 @@ var domain = require('domain');
 var async = require('async');
 var ExpiryManager = require('expirymanager').ExpiryManager;
 var EventEmitter = require('events').EventEmitter;
+var debug = require( 'debug' )( 'loadbalancer' );
 
 var LoadBalancer = function (options) {
   var self = this;
@@ -47,6 +48,8 @@ LoadBalancer.prototype.addMiddleware = function (type, middleware) {
 };
 
 LoadBalancer.prototype._start = function () {
+  debug( '_start', this.sourcePort );
+
   var self = this;
 
   if (this.balancerControllerPath) {
@@ -72,10 +75,13 @@ LoadBalancer.prototype._start = function () {
 };
 
 LoadBalancer.prototype.close = function (callback) {
+  debug( 'close' );
   this._server.close(callback);
 };
 
 LoadBalancer.prototype.setTargets = function (targets) {
+  debug( 'setTargets' );
+
   this.targets = targets;
   this.activeTargets = targets;
   this.activeTargetsLookup = {};
@@ -88,6 +94,8 @@ LoadBalancer.prototype.setTargets = function (targets) {
 };
 
 LoadBalancer.prototype.deactivateTarget = function (host, port) {
+  debug( 'deactivateTarget', host, port );
+
   var self = this;
   
   var hostAndPort = host + ':' + port;
@@ -115,10 +123,13 @@ LoadBalancer.prototype.deactivateTarget = function (host, port) {
 };
 
 LoadBalancer.prototype.isTargetActive = function (host, port) {
+  debug( 'isTargetActive [%s:%d]', host, port );
   return !!this.activeTargetsLookup[host + ':' + port];
 };
 
 LoadBalancer.prototype._hash = function (str, maxValue) {
+  debug( '_hash [%s]', str );
+
   var ch;
   var hash = 0;
   if (str == null || str.length == 0) {
@@ -137,6 +148,8 @@ LoadBalancer.prototype._random = function (str, maxValue) {
 };
 
 LoadBalancer.prototype._chooseTarget = function (sourceSocket) {
+  debug( '_chooseTarget', sourceSocket.remoteAddress );
+
   var selectorFunction;
   if (this.stickiness) {
     selectorFunction = this._hash;
@@ -155,6 +168,8 @@ LoadBalancer.prototype._chooseTarget = function (sourceSocket) {
 };
 
 LoadBalancer.prototype._connectToTarget = function (sourceSocket, callback, newTargetUri) {
+  debug( '_connectToTarget' );
+
   var self = this;
   
   var remoteAddress = sourceSocket.remoteAddress;
@@ -174,6 +189,8 @@ LoadBalancer.prototype._connectToTarget = function (sourceSocket, callback, newT
   var targetSocket = net.createConnection(currentTargetUri.port, currentTargetUri.host);
   
   function connectionFailed (err) {
+    debug( '_connectToTarget.connectionFailed', err.code );
+
     if (err.code == 'ECONNREFUSED') {
       self.deactivateTarget(currentTargetUri.host, currentTargetUri.port);
       targetSocket.removeListener('error', connectionFailed);
@@ -208,6 +225,7 @@ LoadBalancer.prototype._connectToTarget = function (sourceSocket, callback, newT
   }
   
   function connectionSucceeded() {
+    debug( '_connectToTarget.connectionSucceeded' );
     targetSocket.removeListener('error', connectionFailed);
     targetSocket.removeListener('connect', connectionSucceeded);
     callback(null, targetSocket, currentTargetUri);
@@ -218,6 +236,7 @@ LoadBalancer.prototype._connectToTarget = function (sourceSocket, callback, newT
 };
 
 LoadBalancer.prototype._verifyConnection = function (sourceSocket, callback) {
+  debug( '_verifyConnection', sourceSocket.remoteAddress );
   var self = this;
   
   async.applyEachSeries(this._middleware[this.MIDDLEWARE_CONNECTION], sourceSocket,
@@ -231,6 +250,7 @@ LoadBalancer.prototype._verifyConnection = function (sourceSocket, callback) {
 };
 
 LoadBalancer.prototype._handleConnection = function (sourceSocket) {
+  debug( '_handleConnection', sourceSocket.remoteAddress );
   var self = this;
   var remoteAddress = sourceSocket.remoteAddress;
   
@@ -284,10 +304,14 @@ LoadBalancer.prototype._handleConnection = function (sourceSocket) {
 };
 
 LoadBalancer.prototype._rejectConnection = function (sourceSocket) {
+  debug( '_rejectConnection', sourceSocket.remoteAddress );
+
   sourceSocket.end();
 };
 
 LoadBalancer.prototype._acceptConnection = function (sourceSocket) {
+  debug( '_acceptConnection', sourceSocket.remoteAddress );
+
   var self = this;
   
   var remoteAddress = sourceSocket.remoteAddress;
@@ -345,7 +369,9 @@ LoadBalancer.prototype._acceptConnection = function (sourceSocket) {
   });
 };
 
-LoadBalancer.prototype._cleanupSessions = function () {
+LoadBalancer.prototype._cleanupSessions = function ()  {
+  // debug( '_cleanupSessions' );
+
   var expiredKeys = this._sessionExpirer.extractExpiredKeys();
   var key;
   

@@ -13,6 +13,7 @@ var fs = require('fs');
 var path = require('path');
 var forever = require('forever');
 var os = require('os');
+var debug = require( 'debug' )('loadbalancer:cli');
 
 var isWindows = os.platform() == 'win32';
 
@@ -200,7 +201,10 @@ var killExistingBalancers = function (callback) {
 };
 
 var startBalancer = function () {
+  debug( 'startBalancer' );
+
   var child = forever.startDaemon(balancerFilePath, {
+    silent: false,
     uid: balancerUid,
     max: MAX_RESTARTS,
     logFile: logFileName,
@@ -210,10 +214,29 @@ var startBalancer = function () {
   });
   forever.startServer(child);
   successMessage('Started loadbalancer - Logging to ' + logFileName);
+
+  if( process.env.DEBUG ) {
+    debug( 'starting debug/log monitoring' );
+
+    // @note Don't work.
+    forever.tail(logFileName, {
+      length: 100,
+      stream: true
+    }, function debugCallback() {
+      debug( 'debugCallback' );
+
+    });
+
+  }
+
+
+
 };
 
 if (command == 'start') {
   getBalancerIndices(function (err, balancers) {
+    debug( 'getBalancerIndices' );
+
     if (err) {
       errorMessage(err);
     } else {
